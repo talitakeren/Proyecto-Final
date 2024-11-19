@@ -29,6 +29,11 @@ class PassKeeperApp(QtWidgets.QMainWindow):
         self.password_table.setHorizontalHeaderLabels(["Servicio", "Usuario", "Contraseña"])
         self.password_table.horizontalHeader().setStretchLastSection(True)
 
+        # Ajustar ancho de columnas
+        self.password_table.setColumnWidth(0, 130)  # Servicio
+        self.password_table.setColumnWidth(1, 300)  # Usuario (más ancho)
+        self.password_table.setColumnWidth(2, 200)  # Contraseña
+
         # Campos de entrada para Servicio, Usuario y Contraseña
         self.service_input = QtWidgets.QLineEdit(self)
         self.service_input.setGeometry(50, 380, 200, 30)
@@ -96,20 +101,43 @@ class PassKeeperApp(QtWidgets.QMainWindow):
             self.clear_inputs()
 
     def edit_password(self):
-        """Edita los datos seleccionados en la tabla."""
+        """Abre un diálogo para editar los datos seleccionados."""
         selected_row = self.password_table.currentRow()
         if selected_row != -1:
-            service = self.service_input.text()
-            username = self.username_input.text()
-            password = self.password_input.text()
+            # Obtener los datos actuales de la fila seleccionada
+            current_service = self.password_table.item(selected_row, 0).text()
+            current_username = self.password_table.item(selected_row, 1).text()
+            current_password = self.password_table.item(selected_row, 2).text()
 
-            # Validar campos y actualizar
-            if service and username and password:
-                old_service = self.password_table.item(selected_row, 0).text()
+            # Abrir ventana de edición
+            dialog = EditDialog(current_service, current_username, current_password)
+            if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+                # Obtener los nuevos datos del diálogo
+                new_service, new_username, new_password = dialog.get_data()
+
+                # Validar duplicados en la tabla
+                for row_idx in range(self.password_table.rowCount()):
+                    if (
+                            row_idx != selected_row and
+                            self.password_table.item(row_idx, 0).text() == new_service and
+                            self.password_table.item(row_idx, 1).text() == new_username
+                    ):
+                        QtWidgets.QMessageBox.warning(
+                            self,
+                            "Advertencia",
+                            f"Ya existe una entrada con el servicio '{new_service}' y el usuario '{new_username}' en la fila {row_idx + 1}.",
+                        )
+                        return
+
+                # Actualizar datos en la tabla y en el gestor
+                self.password_table.setItem(selected_row, 0, QtWidgets.QTableWidgetItem(new_service))
+                self.password_table.setItem(selected_row, 1, QtWidgets.QTableWidgetItem(new_username))
+                self.password_table.setItem(selected_row, 2, QtWidgets.QTableWidgetItem(new_password))
+
+                # Actualizar datos en el gestor
+                old_service = current_service
                 self.keeper.delete_password(old_service)
-                self.keeper.add_password(service, username, password)
-                self.update_password_table()
-                self.clear_inputs()
+                self.keeper.add_password(new_service, new_username, new_password)
 
     def confirm_delete(self):
         """Muestra una ventana de confirmación antes de eliminar."""
@@ -164,6 +192,45 @@ class PassKeeperApp(QtWidgets.QMainWindow):
         generated_password = ''.join(random.choice(characters) for _ in range(length))
         self.password_input.setText(generated_password)
 
+class EditDialog(QtWidgets.QDialog):
+    def __init__(self, service, username, password):
+        super().__init__()
+        self.setWindowTitle("Editar Entrada")
+        self.setFixedSize(400, 300)
+
+        # Campo Servicio
+        self.service_label = QtWidgets.QLabel("Servicio:", self)
+        self.service_label.setGeometry(50, 50, 100, 30)
+        self.service_input = QtWidgets.QLineEdit(service, self)
+        self.service_input.setGeometry(150, 50, 200, 30)
+
+        # Campo Usuario
+        self.username_label = QtWidgets.QLabel("Usuario:", self)
+        self.username_label.setGeometry(50, 100, 100, 30)
+        self.username_input = QtWidgets.QLineEdit(username, self)
+        self.username_input.setGeometry(150, 100, 200, 30)
+
+        # Campo Contraseña
+        self.password_label = QtWidgets.QLabel("Contraseña:", self)
+        self.password_label.setGeometry(50, 150, 100, 30)
+        self.password_input = QtWidgets.QLineEdit(password, self)
+        self.password_input.setGeometry(150, 150, 200, 30)
+
+        # Botón Guardar
+        self.save_button = QtWidgets.QPushButton("Guardar", self)
+        self.save_button.setGeometry(80, 220, 100, 30)
+        self.save_button.setStyleSheet("background-color: #2C3E50; color: white; font-weight: bold;")
+        self.save_button.clicked.connect(self.accept)
+
+        # Botón Cancelar
+        self.cancel_button = QtWidgets.QPushButton("Cancelar", self)
+        self.cancel_button.setGeometry(220, 220, 100, 30)
+        self.cancel_button.setStyleSheet("background-color: #E74C3C; color: white; font-weight: bold;")
+        self.cancel_button.clicked.connect(self.reject)
+
+    def get_data(self):
+        """Devuelve los datos ingresados."""
+        return self.service_input.text(), self.username_input.text(), self.password_input.text()
 
 if __name__ == "__main__":
     import sys
